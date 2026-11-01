@@ -7,6 +7,7 @@ import (
 
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/compat"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/reflow/truncate"
 	"github.com/yuin/goldmark"
@@ -27,10 +28,46 @@ const (
 
 // style
 var (
-	outlineTitleStyle    = lipgloss.NewStyle().Bold(true)
-	outlineNormalStyle   = lipgloss.NewStyle()
-	outlineCurrentStyle  = lipgloss.NewStyle().Bold(true)
-	outlineSelectedStyle = lipgloss.NewStyle().Reverse(true)
+	outlineBorderColor = compat.AdaptiveColor{
+		Light: lipgloss.Color("#DCDCDC"),
+		Dark:  lipgloss.Color("#3C3C3C"),
+	}
+	outlineTitleColor = compat.AdaptiveColor{
+		Light: lipgloss.Color("#EE6FF8"),
+		Dark:  lipgloss.Color("#EE6FF8"),
+	}
+	outlineNormalColor = compat.AdaptiveColor{
+		Light: lipgloss.Color("#909090"),
+		Dark:  lipgloss.Color("#626262"),
+	}
+	outlineCurrentColor = compat.AdaptiveColor{
+		Light: lipgloss.Color("#04B575"),
+		Dark:  lipgloss.Color("#ECFD65"),
+	}
+	outlineSelectedBg = compat.AdaptiveColor{
+		Light: lipgloss.Color("#DDDADA"),
+		Dark:  lipgloss.Color("#3C3C3C"),
+	}
+	outlineSelectedFg = compat.AdaptiveColor{
+		Light: lipgloss.Color("#FFFDF5"),
+		Dark:  lipgloss.Color("#FFFDF5"),
+	}
+
+	outlineTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(outlineTitleColor)
+	outlineNormalStyle = lipgloss.NewStyle().
+				Foreground(outlineNormalColor)
+	outlineCurrentStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(outlineCurrentColor)
+	outlineSelectedStyle = lipgloss.NewStyle().
+				Background(outlineSelectedBg).
+				Foreground(outlineSelectedFg)
+	outlinePanelStyle = lipgloss.NewStyle().
+				BorderLeft(true).
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderForeground(outlineBorderColor)
 )
 
 // heading is a heading extracted from a markdown document.
@@ -61,12 +98,21 @@ func newOutlineModel() outlineModel {
 	}
 }
 
+// caculateOutlineWidth use the terminal width to compute
 func calculateOutlineWidth(termWidth int) int {
 	if termWidth < minTerminalWidth {
 		return 0
 	}
 	width := termWidth * outlineWidthPercent / 100
 	return min(max(width, outlineMinWidth), outlineMaxWidth)
+}
+
+// innerWidth returns the width available inside the panel's left border that content can use.
+func (m outlineModel) innerWidth() int {
+	if m.width <= 1 {
+		return 0
+	}
+	return m.width - 1
 }
 
 // setContent parses the given markdown and resets outline state.
@@ -77,45 +123,53 @@ func (m *outlineModel) setContent(markdown string) {
 	m.updateViewport()
 }
 
-// setSize updates the outline dimensions from the terminal width. The pager
-// controls whether the outline is visible.
+// setSize updates the outline dimensions from the terminal width.
+// The pager controls whether the outline is visible.
 func (m *outlineModel) setSize(termWidth, height int) {
 	m.width = calculateOutlineWidth(termWidth)
 	m.height = height
-	m.viewport.SetWidth(m.width)
+	m.viewport.SetWidth(m.innerWidth())
 	// One row is reserved for the outline title.
 	m.viewport.SetHeight(max(0, height-1))
 	m.updateViewport()
 }
 
-// renderHeadingLine renders a single heading entry with
-// indentation and highlight for the current scroll position and the selected entry.
+// renderHeadingLine renders a single heading entry
 func (m *outlineModel) renderHeadingLine(index int, h heading) string {
+	// indentation
 	indent := strings.Repeat("  ", max(h.level-1, 0))
 
 	prefix := "  "
 	if index == m.current {
+		// the cursor
 		prefix = "> "
 	}
 
-	line := indent + prefix + h.text
-	if m.width > 0 {
-		line = truncate.StringWithTail(line, uint(m.width), "…")
+	width := m.innerWidth()
+	if width <= 0 {
+		return ""
 	}
 
+	// truncate
+	line := indent + prefix + h.text
+	line = truncate.StringWithTail(line, uint(width), "…")
+
+	// highlight
+	// current scroll position
+	// selected entry
 	switch {
 	case m.focused && index == m.selected:
-		return outlineSelectedStyle.Width(m.width).Render(line)
+		return outlineSelectedStyle.Width(width).Render(line)
 	case index == m.current:
-		return outlineCurrentStyle.Width(m.width).Render(line)
+		return outlineCurrentStyle.Width(width).Render(line)
 	default:
-		return outlineNormalStyle.Width(m.width).Render(line)
+		return outlineNormalStyle.Width(width).Render(line)
 	}
 }
 
 // updateViewport re-renders all headings into the viewport content.
 func (m *outlineModel) updateViewport() {
-	if m.width == 0 || len(m.headings) == 0 {
+	if m.innerWidth() == 0 || len(m.headings) == 0 {
 		m.viewport.SetContent("")
 		return
 	}
@@ -176,14 +230,15 @@ func (m *outlineModel) ensureIndexVisible(index int) {
 	}
 }
 
-// updateCurrent updates the heading that is highlighted for the document's
-// current scroll position.
+// updateCurrent updates the heading that is highlighted for the document's current scroll position.
+// yOffset is the current reading position
 func (m *outlineModel) updateCurrent(yOffset int) {
 	if len(m.headings) == 0 {
 		m.current = 0
 		return
 	}
 
+	// the heading part current reading
 	current := 0
 	for i, h := range m.headings {
 		if h.renderedLine >= 0 && h.renderedLine <= yOffset {
@@ -200,15 +255,18 @@ func (m *outlineModel) updateCurrent(yOffset int) {
 
 // View renders the outline sidebar.
 func (m outlineModel) View() string {
-	if m.width <= 0 {
+	width := m.innerWidth()
+	if width <= 0 {
 		return ""
 	}
 
-	title := outlineTitleStyle.Width(m.width).Render("OUTLINE")
+	title := outlineTitleStyle.Width(width).Render("OUTLINE")
+	content := title + "\n" + m.viewport.View()
 	if len(m.headings) == 0 {
-		return title + "\n" + outlineNormalStyle.Width(m.width).Render("  No headings")
+		content = title + "\n" + outlineNormalStyle.Width(width).Render("  No headings")
 	}
-	return title + "\n" + m.viewport.View()
+
+	return outlinePanelStyle.Height(m.height).Render(content)
 }
 
 // nodeText extracts the plain text of a heading.
@@ -294,8 +352,101 @@ func headingLineMatches(rendered, target string) bool {
 	return false
 }
 
+// fenceOpen code block open
+// return:
+//	byte	used char ` or ~
+//	int	quantity of used char
+//	bool	is the block start?
+func fenceOpen(line string) (ch byte, n int, start bool) {
+	if len(line) < 3 || (line[0] != '`' && line[0] != '~') {
+		return 0, 0, false
+	}
+	ch = line[0]
+	n = 0
+	for n < len(line) && line[n] == ch {
+		n++
+	}
+	if n < 3 {
+		return 0, 0, false
+	}
+	return ch, n, true
+}
+
+// fenceClose code block close
+// return:
+//	bool	should close
+func fenceClose(line string, ch byte, n int) (close bool) {
+	if len(line) < n || line[0] != ch {
+		return false
+	}
+	i := 0
+	for i < len(line) && line[i] == ch {
+		i++
+	}
+	return i >= n && strings.TrimSpace(line[i:]) == ""
+}
+
+// maskMathBlocks replaces $$ display math blocks with blank lines before the markdown parser runs.
+// NOTE: A standalone "=" inside a math block
+//	 would otherwise be interpreted as a Setext heading underline.
+//	 LIKE:
+//		$$
+//		a
+//		=
+//		b
+//		$$
+//	 this will take 'a' as a Setext heading
+//	 so, I wrote this function.
+func maskMathBlocks(source []byte) []byte {
+	lines := strings.Split(string(source), "\n")
+	// code block
+	inFence := false
+	var fenceChar byte
+	fenceLen := 0
+	// math block
+	inMath := false
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if inMath {
+			lines[i] = ""
+			if trimmed == "$$" {
+				inMath = false
+			}
+			continue
+		}
+
+		if inFence {
+			if fenceClose(trimmed, fenceChar, fenceLen) {
+				inFence = false
+			}
+			continue
+		}
+
+		// get into code block
+		if ch, n, ok := fenceOpen(trimmed); ok {
+			inFence = true
+			fenceChar = ch
+			fenceLen = n
+			continue
+		}
+
+		// get into math block
+		if trimmed == "$$" {
+			inMath = true
+			lines[i] = ""
+		}
+	}
+
+	return []byte(strings.Join(lines, "\n"))
+}
+
 // parseHeadings extracts headings from raw markdown.
 func parseHeadings(source []byte) []heading {
+	// Mask math blocks so LaTeX lines are not parsed as Setext headings. Look Detail in this func
+	source = maskMathBlocks(source)
+
 	// use GFM extension
 	md := goldmark.New(goldmark.WithExtensions(extension.GFM))
 	doc := md.Parser().Parse(text.NewReader(source))
