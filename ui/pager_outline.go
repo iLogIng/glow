@@ -149,9 +149,10 @@ func (m *pagerModel) setViewportTarget(line int) {
 // padding both to their configured widths.
 //
 // NOTE: Assumes each line of content and outline occupies one visual row.
-//	 Headings using the text sizing protocol may span multiple rows on supporting
-// 	 terminals, causing sidebar misalignment.
-//	 Known issue in glow v3.
+//
+//	Headings using the text sizing protocol may span multiple rows on supporting
+//	terminals, causing sidebar misalignment.
+//	Known issue in glow v3.
 //
 // Verified on
 // kitty (supports the text sizing protocol): the sidebar is misaligned.

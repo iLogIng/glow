@@ -354,6 +354,7 @@ func headingLineMatches(rendered, target string) bool {
 
 // fenceOpen code block open
 // return:
+//
 //	byte	used char ` or ~
 //	int	quantity of used char
 //	bool	is the block start?
@@ -374,6 +375,7 @@ func fenceOpen(line string) (ch byte, n int, start bool) {
 
 // fenceClose code block close
 // return:
+//
 //	bool	should close
 func fenceClose(line string, ch byte, n int) (close bool) {
 	if len(line) < n || line[0] != ch {
@@ -388,6 +390,7 @@ func fenceClose(line string, ch byte, n int) (close bool) {
 
 // maskMathBlocks replaces $$ display math blocks with blank lines before the markdown parser runs.
 // NOTE: A standalone "=" inside a math block
+//
 //	 would otherwise be interpreted as a Setext heading underline.
 //	 LIKE:
 //		$$
