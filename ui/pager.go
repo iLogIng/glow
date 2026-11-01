@@ -46,6 +46,9 @@ type pagerModel struct {
 	state    pagerState
 	showHelp bool
 
+	outline     *outlineModel
+	showOutline bool
+
 	statusMessage      string
 	statusMessageTimer *time.Timer
 
@@ -60,17 +63,27 @@ func newPagerModel(common *commonModel) pagerModel {
 	// Init viewport
 	vp := viewport.New()
 
+	outline := newOutlineModel()
 	m := pagerModel{
 		common:   common,
 		state:    pagerStateBrowse,
 		viewport: vp,
+		outline:  &outline,
 	}
 	m.initWatcher()
 	return m
 }
 
 func (m *pagerModel) setSize(w, h int) {
-	m.viewport.SetWidth(w)
+	m.outline.setSize(w, h-statusBarHeight)
+	m.outline.visible = m.showOutline && m.isMarkdownFile() && !m.showHelp && m.outline.width > 0
+
+	contentWidth := w
+	if m.outline.visible {
+		contentWidth = max(0, w-m.outline.width)
+	}
+
+	m.viewport.SetWidth(contentWidth)
 	m.viewport.SetHeight(h - statusBarHeight)
 
 	if m.showHelp {
@@ -122,6 +135,11 @@ func (m *pagerModel) unload() {
 		m.statusMessageTimer.Stop()
 	}
 	m.state = pagerStateBrowse
+	m.showOutline = false
+	if m.outline != nil {
+		m.outline.focused = false
+		m.outline.headings = nil
+	}
 	m.viewport.SetContent("")
 	m.viewport.SetYOffset(0)
 	m.unwatchFile()
@@ -135,6 +153,10 @@ func (m pagerModel) update(msg tea.Msg) (pagerModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		if cmd, handled := m.handleOutlineKey(msg); handled {
+			return m, cmd
+		}
+
 		switch msg.String() {
 		case "q", keyEsc:
 			if m.state != pagerStateBrowse {
@@ -183,6 +205,7 @@ func (m pagerModel) update(msg tea.Msg) (pagerModel, tea.Cmd) {
 		log.Info("content rendered", "state", m.state)
 
 		m.setContent(string(msg))
+		m.handleOutlineContentRendered(string(msg))
 		cmds = append(cmds, m.watchFile)
 
 	// The file was changed on disk and we're reloading it
@@ -207,12 +230,21 @@ func (m pagerModel) update(msg tea.Msg) (pagerModel, tea.Cmd) {
 	m.viewport, cmd = m.viewport.Update(msg)
 	cmds = append(cmds, cmd)
 
+	if m.showOutline {
+		m.outline.updateCurrent(m.viewport.YOffset())
+	}
+
 	return m, tea.Batch(cmds...)
 }
 
 func (m pagerModel) View() string {
 	var b strings.Builder
-	fmt.Fprint(&b, m.viewport.View()+"\n")
+
+	content := m.viewport.View()
+	if m.outline.visible && !m.showHelp {
+		content = m.joinContentAndOutline(content, m.outline.View())
+	}
+	fmt.Fprint(&b, content+"\n")
 
 	// Footer
 	m.statusBarView(&b)
