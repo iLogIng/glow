@@ -194,10 +194,10 @@ func TestNewOutlineModel(t *testing.T) {
 		t.Error("new outline should not be focused")
 	}
 	if len(m.headings) != 0 {
-		t.Errorf("new outline should have no headings, got %d", len(m.headings))
+		t.Errorf("new outline should have no headings, got: %d", len(m.headings))
 	}
 	if m.width != 0 || m.height != 0 {
-		t.Errorf("new outline should have zero size, got %dx%d", m.width, m.height)
+		t.Errorf("new outline should have zero size, got: %dx%d", m.width, m.height)
 	}
 }
 
@@ -206,10 +206,10 @@ func TestOutlineSetContent(t *testing.T) {
 	m.setContent("# One\n\n## Two\n")
 
 	if len(m.headings) != 2 {
-		t.Fatalf("expected 2 headings, got %d", len(m.headings))
+		t.Fatalf("expected 2 headings, got: %d", len(m.headings))
 	}
 	if m.selected != 0 || m.current != 0 {
-		t.Errorf("expected selected/current reset to 0, got %d/%d", m.selected, m.current)
+		t.Errorf("expected selected/current reset to 0, got: %d/%d", m.selected, m.current)
 	}
 	if m.headings[0].text != "One" || m.headings[1].text != "Two" {
 		t.Errorf("unexpected heading text: %#v", m.headings)
@@ -221,21 +221,21 @@ func TestOutlineSetSize(t *testing.T) {
 	m.setSize(100, 10)
 
 	if m.width != 25 {
-		t.Errorf("expected width 25, got %d", m.width)
+		t.Errorf("expected width 25, got: %d", m.width)
 	}
 	if m.height != 10 {
-		t.Errorf("expected height 10, got %d", m.height)
+		t.Errorf("expected height 10, got: %d", m.height)
 	}
-	if m.viewport.Width() != 25 {
-		t.Errorf("expected viewport width 25, got %d", m.viewport.Width())
+	if m.viewport.Width() != 24 {
+		t.Errorf("expected viewport width 24 (one column for border), got: %d", m.viewport.Width())
 	}
 	if m.viewport.Height() != 9 {
-		t.Errorf("expected viewport height 9 (one row for title), got %d", m.viewport.Height())
+		t.Errorf("expected viewport height 9 (one row for title), got: %d", m.viewport.Height())
 	}
 
 	m.setSize(40, 10)
 	if m.width != 0 {
-		t.Errorf("expected zero width on narrow terminal, got %d", m.width)
+		t.Errorf("expected zero width on narrow terminal, got: %d", m.width)
 	}
 }
 
@@ -246,19 +246,19 @@ func TestOutlineMoveCursor(t *testing.T) {
 
 	m.moveCursorDown()
 	if m.selected != 1 {
-		t.Errorf("expected selected 1, got %d", m.selected)
+		t.Errorf("expected selected 1, got: %d", m.selected)
 	}
 	m.moveCursorDown()
 	if m.selected != 1 {
-		t.Errorf("expected selected clamped at 1, got %d", m.selected)
+		t.Errorf("expected selected clamped at 1, got: %d", m.selected)
 	}
 	m.moveCursorUp()
 	if m.selected != 0 {
-		t.Errorf("expected selected 0, got %d", m.selected)
+		t.Errorf("expected selected 0, got: %d", m.selected)
 	}
 	m.moveCursorUp()
 	if m.selected != 0 {
-		t.Errorf("expected selected clamped at 0, got %d", m.selected)
+		t.Errorf("expected selected clamped at 0, got: %d", m.selected)
 	}
 }
 
@@ -273,17 +273,17 @@ func TestOutlineUpdateCurrent(t *testing.T) {
 
 	m.updateCurrent(5)
 	if m.current != 0 {
-		t.Errorf("expected current 0, got %d", m.current)
+		t.Errorf("expected current 0, got: %d", m.current)
 	}
 
 	m.updateCurrent(10)
 	if m.current != 1 {
-		t.Errorf("expected current 1, got %d", m.current)
+		t.Errorf("expected current 1, got: %d", m.current)
 	}
 
 	m.updateCurrent(0)
 	if m.current != 0 {
-		t.Errorf("expected current 0, got %d", m.current)
+		t.Errorf("expected current 0, got: %d", m.current)
 	}
 }
 
@@ -294,10 +294,10 @@ func TestOutlineView(t *testing.T) {
 
 	view := m.View()
 	if !strings.Contains(view, "OUTLINE") {
-		t.Errorf("expected OUTLINE title, got %q", view)
+		t.Errorf("expected OUTLINE title, got: %q", view)
 	}
 	if !strings.Contains(view, "One") || !strings.Contains(view, "Two") {
-		t.Errorf("expected headings in view, got %q", view)
+		t.Errorf("expected headings in view, got: %q", view)
 	}
 }
 
@@ -307,11 +307,11 @@ func TestOutlineLongHeadingTruncation(t *testing.T) {
 	m.setSize(100, 10)
 
 	line := m.renderHeadingLine(0, m.headings[0])
-	if width := lipgloss.Width(line); width > m.width {
-		t.Errorf("heading line width %d exceeds outline width %d: %q", width, m.width, line)
+	if width := lipgloss.Width(line); width > m.innerWidth() {
+		t.Errorf("heading line width %d exceeds inner width %d: %q", width, m.innerWidth(), line)
 	}
 	if !strings.Contains(line, "…") {
-		t.Errorf("expected truncated heading to contain ellipsis, got %q", line)
+		t.Errorf("expected truncated heading to contain ellipsis, got: %q", line)
 	}
 }
 
@@ -321,6 +321,54 @@ func TestOutlineEmptyView(t *testing.T) {
 
 	view := m.View()
 	if !strings.Contains(view, "No headings") {
-		t.Errorf("expected empty-state message, got %q", view)
+		t.Errorf("expected empty-state message, got: %q", view)
+	}
+}
+
+func TestParseHeadingsSkipsMathBlocks(t *testing.T) {
+	// # Real
+	//
+	// $$
+	// \begin{bmatrxi} a \\
+	// b \end{bmatrix}
+	// =
+	// \begin{bmatrix} c \\
+	// d \end{bmatrix}
+	// $$
+	//
+	// ## After
+	//
+	source := "# Real\n\n$$\n\\begin{bmatrix} a \\\\ b \\end{bmatrix}\n=\n\\begin{bmatrix} c \\\\ d \\end{bmatrix}\n$$\n\n## After\n"
+	want := []heading{
+		{level: 1, text: "Real", sourceLine: 0, renderedLine: -1},
+		{level: 2, text: "After", sourceLine: 8, renderedLine: -1},
+	}
+
+	got := parseHeadings([]byte(source))
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseHeadings() = %#v, want %#v", got, want)
+	}
+}
+
+func TestParseHeadingsDoesNotMaskMathInCodeFence(t *testing.T) {
+	// # Real
+	//
+	// ```md
+	// $$
+	// =
+	// $$
+	// ```
+	//
+	// ## After
+	//
+	source := "# Real\n\n```md\n$$\n=\n$$\n```\n\n## After\n"
+	want := []heading{
+		{level: 1, text: "Real", sourceLine: 0, renderedLine: -1},
+		{level: 2, text: "After", sourceLine: 8, renderedLine: -1},
+	}
+
+	got := parseHeadings([]byte(source))
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseHeadings() = %#v, want %#v", got, want)
 	}
 }
